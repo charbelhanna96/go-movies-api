@@ -1,0 +1,93 @@
+diff --git a/internal/config/config.go b/internal/config/config.go
+new file mode 100644
+index 0000000..63acfdd
+--- /dev/null
++++ b/internal/config/config.go
+@@ -0,0 +1 @@
++package config
+\ No newline at end of file
+diff --git a/internal/db/db.go b/internal/db/db.go
+new file mode 100644
+index 0000000..10060e9
+--- /dev/null
++++ b/internal/db/db.go
+@@ -0,0 +1 @@
++package db
+\ No newline at end of file
+diff --git a/internal/handler/health.go b/internal/handler/health.go
+new file mode 100644
+index 0000000..cd97792
+--- /dev/null
++++ b/internal/handler/health.go
+@@ -0,0 +1 @@
++package handler
+\ No newline at end of file
+diff --git a/internal/handler/movies.go b/internal/handler/movies.go
+new file mode 100644
+index 0000000..cd97792
+--- /dev/null
++++ b/internal/handler/movies.go
+@@ -0,0 +1 @@
++package handler
+\ No newline at end of file
+diff --git a/internal/middleware/cors.go b/internal/middleware/cors.go
+new file mode 100644
+index 0000000..5ccdd70
+--- /dev/null
++++ b/internal/middleware/cors.go
+@@ -0,0 +1 @@
++package middleware
+\ No newline at end of file
+diff --git a/internal/model/movie.go b/internal/model/movie.go
+new file mode 100644
+index 0000000..0c3b4f2
+--- /dev/null
++++ b/internal/model/movie.go
+@@ -0,0 +1 @@
++package model
+\ No newline at end of file
+diff --git a/internal/repository/postgres.go b/internal/repository/postgres.go
+new file mode 100644
+index 0000000..ed51dc3
+--- /dev/null
++++ b/internal/repository/postgres.go
+@@ -0,0 +1 @@
++package repository
+\ No newline at end of file
+diff --git a/internal/repository/repository.go b/internal/repository/repository.go
+new file mode 100644
+index 0000000..ed51dc3
+--- /dev/null
++++ b/internal/repository/repository.go
+@@ -0,0 +1 @@
++package repository
+\ No newline at end of file
+diff --git a/internal/validator/params.go b/internal/validator/params.go
+new file mode 100644
+index 0000000..9fead90
+--- /dev/null
++++ b/internal/validator/params.go
+@@ -0,0 +1 @@
++package validator
+\ No newline at end of file
+diff --git a/internal/web/response.go b/internal/web/response.go
+new file mode 100644
+index 0000000..b8d871a
+--- /dev/null
++++ b/internal/web/response.go
+@@ -0,0 +1 @@
++package web
+\ No newline at end of file
+diff --git a/main.go b/main.go
+new file mode 100644
+index 0000000..6721964
+--- /dev/null
++++ b/main.go
+@@ -0,0 +1,6 @@
++package main
++
++
++func main() {
++
++}
+\ No newline at end of file
