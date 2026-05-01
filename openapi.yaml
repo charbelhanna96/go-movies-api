@@ -1,0 +1,220 @@
+openapi: 3.0.0
+info:
+  title: go-movies-api
+  version: 1.0.0
+  description: REST API for movie recommendations built in Go.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Exposes Prometheus metrics for scraping. Includes HTTP request count, request duration, movies returned per request, and database query duration.
+      operationId: Metrics
+      responses:
+        200:
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              example: |
+                http_requests_total{method="GET",path="/api/v1/movies",status="200"} 42
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns service health status including database connectivity.
+      operationId: Health
+      responses:
+        200:
+          description: Service is healthy
+          content:
+            application/json:
+              example:
+                status: healthy
+        503:
+          description: Service is unhealthy
+          content:
+            application/json:
+              example:
+                status: unhealthy
+
+  /api/v1/movies:
+    get:
+      summary: Get ranked and filtered list of movies
+      description: |
+        Returns a list of movies ordered by rating descending.
+        Multiple optional filters can be combined: director(s), genre(s),
+        release year range, duration range, rating range, and result limit.
+      operationId: GetMovies
+      parameters:
+        - name: directors
+          in: query
+          required: false
+          description: Comma-separated list of director IDs.
+          example: 1,2,3
+          schema:
+            type: string
+            pattern: ^([0-9]+,)*[0-9]+$
+
+        - name: genres
+          in: query
+          required: false
+          description: Comma-separated list of genre IDs.
+          example: 1,2,3
+          schema:
+            type: string
+            pattern: ^([0-9]+,)*[0-9]+$
+
+        - name: min-year
+          in: query
+          required: false
+          description: Inclusive minimum release year.
+          schema:
+            type: integer
+            minimum: 1888
+            maximum: 2100
+
+        - name: max-year
+          in: query
+          required: false
+          description: Inclusive maximum release year.
+          schema:
+            type: integer
+            minimum: 1888
+            maximum: 2100
+
+        - name: min-duration
+          in: query
+          required: false
+          description: Inclusive minimum duration in minutes.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 600
+
+        - name: max-duration
+          in: query
+          required: false
+          description: Inclusive maximum duration in minutes.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 600
+
+        - name: min-rating
+          in: query
+          required: false
+          description: Inclusive minimum rating (0.0 to 5.0).
+          schema:
+            type: number
+            format: float
+            minimum: 0
+            maximum: 5
+
+        - name: max-rating
+          in: query
+          required: false
+          description: Inclusive maximum rating (0.0 to 5.0).
+          schema:
+            type: number
+            format: float
+            minimum: 0
+            maximum: 5
+
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+
+      responses:
+        200:
+          description: JSON array of movies ordered by rating descending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Movie'
+              example:
+                - id: 2
+                  title: The Dark Knight
+                  yearReleased: 2008
+                  rating: 4.90
+                  durationMins: 152
+                  genre:
+                    id: 1
+                    title: Action
+                  director:
+                    id: 1
+                    firstName: Christopher
+                    lastName: Nolan
+
+        400:
+          description: Bad request - invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: invalid query parameters
+
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: internal server error
+
+components:
+  schemas:
+    Director:
+      type: object
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+
+    Genre:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+
+    Movie:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        yearReleased:
+          type: integer
+        rating:
+          type: number
+          format: float
+        durationMins:
+          type: integer
+        genre:
+          $ref: '#/components/schemas/Genre'
+        director:
+          $ref: '#/components/schemas/Director'
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
