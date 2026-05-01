@@ -13,19 +13,22 @@ This project demonstrates a clean, layered backend architecture for a movie sear
 - Docker and Docker Compose
 - go-playground/validator for input validation
 - lib/pq for PostgreSQL connectivity
+- Prometheus for metrics
+- OpenTelemetry with Jaeger for distributed tracing
+- testcontainers-go for integration tests
 
 ## Architecture
 
 The backend is organized into small, focused layers:
 
 ```
-HTTP -> Handler -> Validator -> Repository -> Database
+HTTP -> Middleware -> Handler -> Validator -> Repository -> Database
 ```
 
-- **Middleware** handles CORS
-- **Handler** orchestrates request and response logic
-- **Validator** parses and validates query parameters
-- **Repository** is the only layer that talks to PostgreSQL
+- **Middleware** handles CORS, Prometheus metrics collection, and OpenTelemetry trace propagation
+- **Handler** orchestrates request and response logic, creates child spans for tracing
+- **Validator** parses and validates all query parameters before they reach the handler
+- **Repository** is the only layer that talks to PostgreSQL, records query duration metrics and database spans
 - **main.go** is the composition root that wires everything together
 
 Configuration is loaded from environment variables. Required database credentials are validated at startup. The service shuts down gracefully on SIGTERM, draining in-flight requests before exiting.
@@ -40,9 +43,10 @@ cd go-movies-api
 docker compose up --build
 ```
 
-The API will be available at http://localhost:8080
-
-Swagger UI will be available at http://localhost:8081
+- API: http://localhost:8080
+- Swagger UI: http://localhost:8081
+- Jaeger UI: http://localhost:16686
+- Prometheus metrics: http://localhost:8080/metrics
 
 ## API
 
@@ -60,7 +64,7 @@ Returns movies ordered by rating descending. All parameters are optional and can
 | max-duration | integer | Maximum duration in minutes |
 | min-rating | float | Minimum rating (0.0-5.0) |
 | max-rating | float | Maximum rating (0.0-5.0) |
-| limit | integer | Maximum number of results |
+| limit | integer | Maximum number of results (1-1000) |
 
 Example requests:
 
@@ -68,14 +72,17 @@ Example requests:
 # All movies
 curl http://localhost:8080/api/v1/movies
 
-# Action movies with rating above 4.5
-curl "http://localhost:8080/api/v1/movies?genres=1&min-rating=4.5"
+# Movies with rating above 4.5
+curl "http://localhost:8080/api/v1/movies?min-rating=4.5"
 
-# Christopher Nolan movies released after 2000
+# Director 1 movies released after 2000
 curl "http://localhost:8080/api/v1/movies?directors=1&min-year=2000"
 
 # Top 5 movies under 2 hours
 curl "http://localhost:8080/api/v1/movies?max-duration=120&limit=5"
+
+# Action or SciFi movies (genre IDs 1 and 5)
+curl "http://localhost:8080/api/v1/movies?genres=1,5"
 ```
 
 ### GET /health
@@ -88,7 +95,7 @@ curl http://localhost:8080/health
 
 ### GET /metrics
 
-Exposes Prometheus metrics for scraping. Intended for use with a Prometheus server or compatible monitoring tool.
+Exposes Prometheus metrics for scraping.
 
 Metrics exposed:
 
@@ -101,14 +108,52 @@ Metrics exposed:
 curl http://localhost:8080/metrics
 ```
 
+## Observability
+
+### Metrics
+
+The service exposes Prometheus metrics at `/metrics`. Metrics are recorded at three levels:
+
+- HTTP middleware records request count and duration for every request
+- Handler records the number of movies returned per search
+- Repository records database query duration per operation
+
+### Tracing
+
+The service uses OpenTelemetry to emit traces to Jaeger. Every request produces a trace with the following span hierarchy:
+
+```
+GET /api/v1/movies
+├── ParseMovieFilters
+└── GetMovies
+    └── db.QueryMovies
+```
+
+Each span includes relevant attributes such as filter counts, movies returned, and HTTP metadata. Error spans are marked with status codes and descriptions. Trace context is propagated via standard HTTP headers, enabling end-to-end tracing across multiple services.
+
+Open the Jaeger UI at http://localhost:16686 to inspect traces.
+
+## Testing
+
+Unit tests cover the validator and handler layers. Integration tests cover the repository layer using real PostgreSQL via testcontainers.
+
+```bash
+# Unit tests
+go test ./internal/validator/... ./internal/handler/... -v
+
+# Integration tests (requires Docker)
+go test ./internal/repository/... -v -timeout 120s -tags integration
+```
+
 ## Security
 
 - All inputs are validated server-side before reaching the database
 - SQL injection is prevented through parameterized queries
-- CORS is configured with an allowlist
+- CORS is configured with an origin allowlist
 - Database credentials are required at startup and never hardcoded
-- HTTP timeouts are configured to prevent hanging requests
+- HTTP timeouts are configured on read, write, and idle connections
+- Handler timeouts prevent long-running requests from blocking resources
 
 ## Dataset
 
-The database is seeded with 22 movies across 10 genres directed by 10 directors including Christopher Nolan, Quentin Tarantino, Martin Scorsese, and others.
+The database is seeded with 22 movies across 10 genres directed by 10 directors.
