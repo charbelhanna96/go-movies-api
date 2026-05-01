@@ -86,6 +86,21 @@ Returns the health status of the service including database connectivity.
 curl http://localhost:8080/health
 ```
 
+### GET /metrics
+
+Exposes Prometheus metrics for scraping. Intended for use with a Prometheus server or compatible monitoring tool.
+
+Metrics exposed:
+
+- `http_requests_total` - total HTTP requests by method, path, and status code
+- `http_request_duration_seconds` - HTTP request duration histogram by method and path
+- `movies_returned_per_request` - histogram of movies returned per search request
+- `db_query_duration_seconds` - database query duration histogram by operation
+
+```bash
+curl http://localhost:8080/metrics
+```
+
 ## Security
 
 - All inputs are validated server-side before reaching the database

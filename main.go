@@ -14,6 +14,7 @@ import (
 	"github.com/charbelhanna96/go-movies-api/internal/handler"
 	"github.com/charbelhanna96/go-movies-api/internal/middleware"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -46,11 +47,12 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler.Health)
+	mux.Handle("GET /metrics", promhttp.Handler())
 	mux.HandleFunc("GET /api/v1/movies", moviesHandler.GetMovies)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      middleware.CORS(cfg.AllowedOrigins, mux),
+		Handler:      middleware.CORS(cfg.AllowedOrigins, middleware.Metrics(mux)),
 		ReadTimeout:  cfg.HTTPConfig.ReadTimeout,
 		WriteTimeout: cfg.HTTPConfig.WriteTimeout,
 		IdleTimeout:  cfg.HTTPConfig.IdleTimeout,

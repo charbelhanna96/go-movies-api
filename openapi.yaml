@@ -9,6 +9,19 @@ servers:
     description: Local development server
 
 paths:
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Exposes Prometheus metrics for scraping. Includes HTTP request count, request duration, movies returned per request, and database query duration.
+      operationId: Metrics
+      responses:
+        200:
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              example: |
+                http_requests_total{method="GET",path="/api/v1/movies",status="200"} 42
+
   /health:
     get:
       summary: Health check
@@ -144,7 +157,7 @@ paths:
                     lastName: Nolan
 
         400:
-          description: Bad request — invalid query parameters
+          description: Bad request - invalid query parameters
           content:
             application/json:
               schema:

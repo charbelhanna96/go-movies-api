@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/charbelhanna96/go-movies-api/internal/metrics"
 	"github.com/charbelhanna96/go-movies-api/internal/model"
 	"github.com/lib/pq"
 )
@@ -21,6 +23,8 @@ func NewPostgresMovieRepository(db *sql.DB) MovieRepository {
 
 // GetMovies retrieves movies from the database based on the provided filters.
 func (r *postgresMovieRepository) GetMovies(ctx context.Context, filters MovieFilters) ([]model.Movie, error) {
+	start := time.Now()
+
 	query, args := buildQuery(filters)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -44,6 +48,8 @@ func (r *postgresMovieRepository) GetMovies(ctx context.Context, filters MovieFi
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate movies: %w", err)
 	}
+
+	metrics.DatabaseQueryDuration.WithLabelValues("get_movies").Observe(time.Since(start).Seconds())
 
 	return movies, nil
 }

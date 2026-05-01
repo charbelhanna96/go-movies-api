@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/charbelhanna96/go-movies-api/internal/metrics"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
 	"github.com/charbelhanna96/go-movies-api/internal/validator"
 	"github.com/charbelhanna96/go-movies-api/internal/web"
@@ -43,6 +44,8 @@ func (handler *MoviesHandler) GetMovies(respWriter http.ResponseWriter, req *htt
 		web.Error(respWriter, http.StatusInternalServerError, "internal server error")
 		return
 	}
+
+	metrics.MoviesReturned.Observe(float64(len(movies)))
 
 	web.JSON(respWriter, http.StatusOK, movies)
 }
