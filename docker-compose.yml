@@ -40,9 +40,12 @@ services:
       HTTP_IDLE_TIMEOUT_SEC: "60"
       HEALTH_HANDLER_TIMEOUT_SEC: "2"
       MOVIES_HANDLER_TIMEOUT_SEC: "5"
+      OTEL_ENDPOINT: "jaeger:4318"
     depends_on:
       postgres:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
   swagger-ui:
     image: swaggerapi/swagger-ui
@@ -52,3 +55,11 @@ services:
       SWAGGER_JSON: /openapi.yaml
     volumes:
       - ./openapi.yaml:/openapi.yaml
+
+  jaeger:
+      image: jaegertracing/all-in-one:latest
+      ports:
+        - "16686:16686"   # Jaeger UI
+        - "4318:4318"     # OTLP HTTP receiver
+      environment:
+        COLLECTOR_OTLP_ENABLED: "true"

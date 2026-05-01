@@ -14,6 +14,7 @@ import (
 	"github.com/charbelhanna96/go-movies-api/internal/handler"
 	"github.com/charbelhanna96/go-movies-api/internal/middleware"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
+	"github.com/charbelhanna96/go-movies-api/internal/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -27,6 +28,13 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
 	})))
+
+	shutdownTracing, err := tracing.Setup(context.Background(), cfg.OtelEndpoint)
+	if err != nil {
+		slog.Error("failed to setup tracing", "error", err)
+		os.Exit(1)
+	}
+	defer shutdownTracing(context.Background())
 
 	if err := cfg.Validate(); err != nil {
 		slog.Error("invalid configuration", "error", err)
@@ -52,7 +60,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      middleware.CORS(cfg.AllowedOrigins, middleware.Metrics(mux)),
+		Handler:      middleware.CORS(cfg.AllowedOrigins, middleware.Tracing(middleware.Metrics(mux))),
 		ReadTimeout:  cfg.HTTPConfig.ReadTimeout,
 		WriteTimeout: cfg.HTTPConfig.WriteTimeout,
 		IdleTimeout:  cfg.HTTPConfig.IdleTimeout,

@@ -10,6 +10,8 @@ import (
 	"github.com/charbelhanna96/go-movies-api/internal/metrics"
 	"github.com/charbelhanna96/go-movies-api/internal/model"
 	"github.com/lib/pq"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type postgresMovieRepository struct {
@@ -23,6 +25,10 @@ func NewPostgresMovieRepository(db *sql.DB) MovieRepository {
 
 // GetMovies retrieves movies from the database based on the provided filters.
 func (r *postgresMovieRepository) GetMovies(ctx context.Context, filters MovieFilters) ([]model.Movie, error) {
+	tracer := otel.Tracer("go-movies-api")
+	ctx, span := tracer.Start(ctx, "db.QueryMovies")
+	defer span.End()
+
 	start := time.Now()
 
 	query, args := buildQuery(filters)
@@ -49,6 +55,8 @@ func (r *postgresMovieRepository) GetMovies(ctx context.Context, filters MovieFi
 		return nil, fmt.Errorf("iterate movies: %w", err)
 	}
 
+	span.SetAttributes(attribute.Int("movies.count", len(movies)))
+	
 	metrics.DatabaseQueryDuration.WithLabelValues("get_movies").Observe(time.Since(start).Seconds())
 
 	return movies, nil

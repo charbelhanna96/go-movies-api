@@ -20,6 +20,7 @@ type Config struct {
 	HandlersConfig HandlersConfig
 	AppConfig      AppConfig
 	LogLevel       string
+	OtelEndpoint   string
 }
 
 type AppConfig struct {
@@ -64,6 +65,7 @@ func Load(envFile ...string) Config {
 		Port:           getEnv("PORT", "8080"),
 		AllowedOrigins: getEnvList("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
 		LogLevel:       getEnv("LOG_LEVEL", "info"),
+		OtelEndpoint:   getEnv("OTEL_ENDPOINT", "jaeger:4318"),
 		AppConfig: AppConfig{
 			ShutdownTimeout: time.Duration(getEnvInt("APP_SHUTDOWN_TIMEOUT_SEC", 15)) * time.Second,
 		},
