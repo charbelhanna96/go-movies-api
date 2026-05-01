@@ -1,0 +1,153 @@
+package handler_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/charbelhanna96/go-movies-api/internal/handler"
+	"github.com/charbelhanna96/go-movies-api/internal/model"
+	"github.com/charbelhanna96/go-movies-api/internal/repository"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+type mockMovieRepository struct {
+	movies []model.Movie
+	err    error
+}
+
+func (m *mockMovieRepository) GetMovies(ctx context.Context, filters repository.MovieFilters) ([]model.Movie, error) {
+	return m.movies, m.err
+}
+
+var testMovies = []model.Movie{
+	{
+		ID:           1,
+		Title:        "Movie A",
+		YearReleased: 2000,
+		Rating:       4.50,
+		DurationMins: 100,
+		Genre:        model.Genre{ID: 1, Title: "Genre A"},
+		Director:     model.Director{ID: 1, FirstName: "John", LastName: "Doe"},
+	},
+	{
+		ID:           2,
+		Title:        "Movie B",
+		YearReleased: 2010,
+		Rating:       4.80,
+		DurationMins: 120,
+		Genre:        model.Genre{ID: 2, Title: "Genre B"},
+		Director:     model.Director{ID: 2, FirstName: "Jane", LastName: "Doe"},
+	},
+}
+
+func TestGetMovies_Success(t *testing.T) {
+	repo := &mockMovieRepository{movies: testMovies}
+	h := handler.NewMoviesHandler(repo, 5*time.Second)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var result []model.Movie
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Len(t, result, 2)
+	assert.Equal(t, "Movie A", result[0].Title)
+}
+
+func TestGetMovies_EmptyResult(t *testing.T) {
+	repo := &mockMovieRepository{movies: []model.Movie{}}
+	h := handler.NewMoviesHandler(repo, 5*time.Second)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies?min-rating=5.0", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var result []model.Movie
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Len(t, result, 0)
+}
+
+func TestGetMovies_InvalidQueryParam(t *testing.T) {
+	repo := &mockMovieRepository{movies: testMovies}
+	h := handler.NewMoviesHandler(repo, 5*time.Second)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies?min-year=abc", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var result map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Equal(t, "invalid query parameters", result["message"])
+}
+
+func TestGetMovies_RepositoryError(t *testing.T) {
+	repo := &mockMovieRepository{err: fmt.Errorf("database connection lost")}
+	h := handler.NewMoviesHandler(repo, 5*time.Second)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var result map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Equal(t, "internal server error", result["message"])
+}
+
+func TestGetMovies_ContentTypeIsJSON(t *testing.T) {
+	repo := &mockMovieRepository{movies: testMovies}
+	h := handler.NewMoviesHandler(repo, 5*time.Second)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+}
+
+func TestGetMovies_WithValidFilters(t *testing.T) {
+	repo := &mockMovieRepository{movies: testMovies[:1]}
+	h := handler.NewMoviesHandler(repo, 5*time.Second)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies?directors=1&min-rating=4.0&limit=1", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var result []model.Movie
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
+	assert.Len(t, result, 1)
+}
+
+func TestGetMovies_ResponseIsJSONArray(t *testing.T) {
+	repo := &mockMovieRepository{movies: []model.Movie{}}
+	h := handler.NewMoviesHandler(repo, 5*time.Second)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "[]")
+}
