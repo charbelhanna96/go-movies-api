@@ -12,6 +12,7 @@ import (
 	"github.com/charbelhanna96/go-movies-api/internal/config"
 	"github.com/charbelhanna96/go-movies-api/internal/db"
 	"github.com/charbelhanna96/go-movies-api/internal/handler"
+	"github.com/charbelhanna96/go-movies-api/internal/metrics"
 	"github.com/charbelhanna96/go-movies-api/internal/middleware"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
 	"github.com/charbelhanna96/go-movies-api/internal/tracing"
@@ -55,7 +56,10 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler.Health)
-	mux.Handle("GET /metrics", promhttp.Handler())
+	mux.Handle("GET /metrics", promhttp.HandlerFor(
+		metrics.Registry,
+		promhttp.HandlerOpts{},
+	))
 	mux.HandleFunc("GET /api/v1/movies", moviesHandler.GetMovies)
 
 	server := &http.Server{
