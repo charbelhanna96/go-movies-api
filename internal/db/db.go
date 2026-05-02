@@ -32,7 +32,9 @@ func Connect(conf config.DatabaseConfig) (*sql.DB, error) {
 	database.SetConnMaxIdleTime(conf.ConnMaxIdleTime)
 
 	if err := database.Ping(); err != nil {
-		database.Close()
+		if err := database.Close(); err != nil {
+			slog.Error("failed to close database connection", "error", err)
+		}
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 

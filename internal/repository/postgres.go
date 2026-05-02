@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -36,7 +37,12 @@ func (r *postgresMovieRepository) GetMovies(ctx context.Context, filters MovieFi
 	if err != nil {
 		return nil, fmt.Errorf("query movies: %w", err)
 	}
-	defer rows.Close()
+
+	defer func() {
+		if err := rows.Close(); err != nil {
+			slog.Error("failed to close rows", "error", err)
+		}
+	}()
 
 	movies := make([]model.Movie, 0)
 	for rows.Next() {
