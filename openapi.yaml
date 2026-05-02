@@ -132,10 +132,26 @@ paths:
             type: integer
             minimum: 1
             maximum: 1000
-
+        - name: after_cursor
+          in: query
+          required: false
+          description: Opaque cursor returned by the previous response in the X-Next-Cursor header. Used to fetch the next page of results.
+          schema:
+            type: string
       responses:
         200:
           description: JSON array of movies ordered by rating descending
+          headers:
+            X-Has-More:
+              description: Whether there are more results beyond the current page.
+              schema:
+                type: boolean
+              example: true
+            X-Next-Cursor:
+              description: Cursor to pass as after_cursor to fetch the next page. Only present when X-Has-More is true.
+              schema:
+                type: string
+              example: NC44ODo2
           content:
             application/json:
               schema:
