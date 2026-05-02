@@ -35,7 +35,12 @@ func main() {
 		slog.Error("failed to setup tracing", "error", err)
 		os.Exit(1)
 	}
-	defer shutdownTracing(context.Background())
+
+	defer func() {
+		if err := shutdownTracing(context.Background()); err != nil {
+			slog.Error("failed to shutdown tracing", "error", err)
+		}
+	}()
 
 	if err := cfg.Validate(); err != nil {
 		slog.Error("invalid configuration", "error", err)
@@ -47,7 +52,12 @@ func main() {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
-	defer database.Close()
+
+	defer func() {
+		if err := database.Close(); err != nil {
+			slog.Error("failed to close database", "error", err)
+		}
+	}()
 
 	movieRepo := repository.NewPostgresMovieRepository(database)
 
