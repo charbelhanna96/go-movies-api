@@ -2,8 +2,11 @@ package handler
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/charbelhanna96/go-movies-api/internal/metrics"
@@ -48,24 +51,50 @@ func (handler *MoviesHandler) GetMovies(respWriter http.ResponseWriter, req *htt
 
 	slog.Debug("movie filters parsed", "filters", filters)
 
-	// span for repository call
+	// fetch one extra to detect if there are more results
+	limitPlusOne := filters.Limit
+	if limitPlusOne != nil {
+		n := *limitPlusOne + 1
+		limitPlusOne = &n
+	}
+	filtersWithExtra := filters
+	filtersWithExtra.Limit = limitPlusOne
+
 	ctx, repoSpan := tracer.Start(ctx, "GetMovies")
 	repoSpan.SetAttributes(
 		attribute.Int("directors.count", len(filters.DirectorIDs)),
 		attribute.Int("genres.count", len(filters.GenreIDs)),
 	)
-	movies, err := handler.movieRepo.GetMovies(ctx, filters)
 
+	movies, err := handler.movieRepo.GetMovies(ctx, filtersWithExtra)
 	if err != nil {
-		slog.Error("failed to get movies", "error", err, "path", req.URL.Path, "query", req.URL.RawQuery)
 		repoSpan.SetStatus(codes.Error, err.Error())
 		repoSpan.End()
+		slog.Error("failed to get movies", "error", err, "path", req.URL.Path, "query", req.URL.RawQuery)
 		web.Error(respWriter, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	repoSpan.End()
 
-	metrics.MoviesReturned.Observe(float64(len(movies)))
+	// check if there are more results
+	hasMore := filters.Limit != nil && len(movies) > *filters.Limit
+	if hasMore {
+		movies = movies[:*filters.Limit]
+	}
 
+	// set pagination headers
+	respWriter.Header().Set("X-Has-More", strconv.FormatBool(hasMore))
+	if hasMore && len(movies) > 0 {
+		last := movies[len(movies)-1]
+		respWriter.Header().Set("X-Next-Cursor", encodeCursor(last.Rating, last.ID))
+	}
+
+	metrics.MoviesReturned.Observe(float64(len(movies)))
 	web.JSON(respWriter, http.StatusOK, movies)
+}
+
+// encodeCursor encodes the last movie's rating and id into a base64 cursor string.
+func encodeCursor(rating float64, id int) string {
+	raw := fmt.Sprintf("%g:%d", rating, id)
+	return base64.StdEncoding.EncodeToString([]byte(raw))
 }

@@ -56,7 +56,7 @@ func (r *postgresMovieRepository) GetMovies(ctx context.Context, filters MovieFi
 	}
 
 	span.SetAttributes(attribute.Int("movies.count", len(movies)))
-	
+
 	metrics.DatabaseQueryDuration.WithLabelValues("get_movies").Observe(time.Since(start).Seconds())
 
 	return movies, nil
@@ -133,6 +133,15 @@ func buildQuery(filters MovieFilters) (string, []any) {
 		conditions = append(conditions, fmt.Sprintf("m.rating <= $%d", argIndex))
 		args = append(args, *filters.MaxRating)
 		argIndex++
+	}
+
+	if filters.AfterRating != nil && filters.AfterID != nil {
+		conditions = append(conditions, fmt.Sprintf(
+			"(m.rating < $%d OR (m.rating = $%d AND m.id > $%d))",
+			argIndex, argIndex+1, argIndex+2,
+		))
+		args = append(args, *filters.AfterRating, *filters.AfterRating, *filters.AfterID)
+		argIndex += 3
 	}
 
 	if len(conditions) > 0 {
