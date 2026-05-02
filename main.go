@@ -12,6 +12,7 @@ import (
 	"github.com/charbelhanna96/go-movies-api/internal/config"
 	"github.com/charbelhanna96/go-movies-api/internal/db"
 	"github.com/charbelhanna96/go-movies-api/internal/handler"
+	"github.com/charbelhanna96/go-movies-api/internal/kafka"
 	"github.com/charbelhanna96/go-movies-api/internal/metrics"
 	"github.com/charbelhanna96/go-movies-api/internal/middleware"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
@@ -59,10 +60,20 @@ func main() {
 		}
 	}()
 
+	kafkaProducer, err := kafka.NewProducer(cfg.KafkaBrokers)
+	if err != nil {
+		slog.Error("failed to create kafka producer", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := kafkaProducer.Close(); err != nil {
+			slog.Error("failed to close kafka producer", "error", err)
+		}
+	}()
 	movieRepo := repository.NewPostgresMovieRepository(database)
 
 	healthHandler := handler.NewHealthHandler(database, cfg.HandlersConfig.HealthTimeout)
-	moviesHandler := handler.NewMoviesHandler(movieRepo, cfg.HandlersConfig.MoviesTimeout)
+	moviesHandler := handler.NewMoviesHandler(movieRepo, kafkaProducer, cfg.HandlersConfig.MoviesTimeout)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler.Health)

@@ -1,0 +1,510 @@
+diff --git a/.env.example b/.env.example
+index b9f6ff9..39ca988 100644
+--- a/.env.example
++++ b/.env.example
+@@ -30,3 +30,6 @@ MOVIES_HANDLER_TIMEOUT_SEC=5
+ 
+ # OBSERVABILITY
+ OTEL_ENDPOINT=jaeger:4318
++
++# KAFKA
++KAFKA_BROKERS=kafka:9092
+diff --git a/docker-compose.yml b/docker-compose.yml
+index a51e1e1..63645ee 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -41,11 +41,14 @@ services:
+       HEALTH_HANDLER_TIMEOUT_SEC: "2"
+       MOVIES_HANDLER_TIMEOUT_SEC: "5"
+       OTEL_ENDPOINT: "jaeger:4318"
++      KAFKA_BROKERS: "kafka:9092"
+     depends_on:
+       postgres:
+         condition: service_healthy
+       jaeger:
+         condition: service_started
++      kafka:
++        condition: service_healthy
+ 
+   swagger-ui:
+     image: swaggerapi/swagger-ui
+@@ -62,4 +65,25 @@ services:
+         - "16686:16686"   # Jaeger UI
+         - "4318:4318"     # OTLP HTTP receiver
+       environment:
+-        COLLECTOR_OTLP_ENABLED: "true"
+\ No newline at end of file
++        COLLECTOR_OTLP_ENABLED: "true"
++
++  kafka:
++      image: apache/kafka:3.9.0
++      ports:
++        - "9092:9092"
++      environment:
++        KAFKA_NODE_ID: 0
++        KAFKA_PROCESS_ROLES: broker,controller
++        KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
++        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
++        KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
++        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
++        KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
++        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
++        KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
++      healthcheck:
++        test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
++        interval: 10s
++        timeout: 5s
++        retries: 5
++        start_period: 15s
+diff --git a/go.mod b/go.mod
+index 368f92c..4734f15 100644
+--- a/go.mod
++++ b/go.mod
+@@ -30,6 +30,8 @@ require (
+ 	github.com/distribution/reference v0.6.0 // indirect
+ 	github.com/docker/go-connections v0.6.0 // indirect
+ 	github.com/docker/go-units v0.5.0 // indirect
++	github.com/eapache/go-resiliency v1.7.0 // indirect
++	github.com/eapache/queue v1.1.0 // indirect
+ 	github.com/ebitengine/purego v0.10.0 // indirect
+ 	github.com/felixge/httpsnoop v1.0.4 // indirect
+ 	github.com/go-logr/logr v1.4.3 // indirect
+@@ -37,6 +39,12 @@ require (
+ 	github.com/go-ole/go-ole v1.2.6 // indirect
+ 	github.com/google/uuid v1.6.0 // indirect
+ 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
++	github.com/hashicorp/go-uuid v1.0.3 // indirect
++	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
++	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
++	github.com/jcmturner/gofork v1.7.6 // indirect
++	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
++	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
+ 	github.com/klauspost/compress v1.18.5 // indirect
+ 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
+ 	github.com/magiconair/properties v1.8.10 // indirect
+@@ -52,11 +60,13 @@ require (
+ 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+ 	github.com/opencontainers/go-digest v1.0.0 // indirect
+ 	github.com/opencontainers/image-spec v1.1.1 // indirect
++	github.com/pierrec/lz4/v4 v4.1.26 // indirect
+ 	github.com/pmezard/go-difflib v1.0.0 // indirect
+ 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
+ 	github.com/prometheus/client_model v0.6.2 // indirect
+ 	github.com/prometheus/common v0.66.1 // indirect
+ 	github.com/prometheus/procfs v0.16.1 // indirect
++	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
+ 	github.com/shirou/gopsutil/v4 v4.26.3 // indirect
+ 	github.com/sirupsen/logrus v1.9.4 // indirect
+ 	github.com/tklauser/go-sysconf v0.3.16 // indirect
+@@ -69,7 +79,7 @@ require (
+ 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
+ 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
+ 	go.yaml.in/yaml/v2 v2.4.2 // indirect
+-	golang.org/x/net v0.52.0 // indirect
++	golang.org/x/net v0.53.0 // indirect
+ 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
+ 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
+ 	google.golang.org/grpc v1.80.0 // indirect
+@@ -78,13 +88,14 @@ require (
+ )
+ 
+ require (
++	github.com/IBM/sarama v1.48.0
+ 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
+ 	github.com/go-playground/locales v0.14.1 // indirect
+ 	github.com/go-playground/universal-translator v0.18.1 // indirect
+ 	github.com/leodido/go-urn v1.4.0 // indirect
+ 	github.com/prometheus/client_golang v1.23.2
+ 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.43.0
+-	golang.org/x/crypto v0.49.0 // indirect
+-	golang.org/x/sys v0.42.0 // indirect
+-	golang.org/x/text v0.35.0 // indirect
++	golang.org/x/crypto v0.50.0 // indirect
++	golang.org/x/sys v0.43.0 // indirect
++	golang.org/x/text v0.36.0 // indirect
+ )
+diff --git a/go.sum b/go.sum
+index 02c49f7..7e13b16 100644
+--- a/go.sum
++++ b/go.sum
+@@ -4,6 +4,8 @@ github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 h1:He8af
+ github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6/go.mod h1:8o94RPi1/7XTJvwPpRSzSUedZrtlirdB3r9Z20bi2f8=
+ github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c h1:udKWzYgxTojEKWjV8V+WSxDXJ4NFATAsZjh8iIbsQIg=
+ github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
++github.com/IBM/sarama v1.48.0 h1:9LJS0VNeg/boXxT/GLAMDKX6uSQ1mr/5F/j4v9gSeBQ=
++github.com/IBM/sarama v1.48.0/go.mod h1:UhvwPF8zilmLOSd6O+ENzdycCJYwMww1U9DJOZpoCro=
+ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
+ github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
+ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
+@@ -26,6 +28,7 @@ github.com/cpuguy83/dockercfg v0.3.2 h1:DlJTyZGBDlXqUZ2Dk2Q3xHs/FtnooJJVaad2S9GK
+ github.com/cpuguy83/dockercfg v0.3.2/go.mod h1:sugsbF4//dDlL/i+S+rtpIWp+5h0BHJHfjj5/jFyUJc=
+ github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
+ github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
++github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+ github.com/distribution/reference v0.6.0 h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5QvfrDyIgxBk=
+@@ -34,6 +37,10 @@ github.com/docker/go-connections v0.6.0 h1:LlMG9azAe1TqfR7sO+NJttz1gy6KO7VJBh+pM
+ github.com/docker/go-connections v0.6.0/go.mod h1:AahvXYshr6JgfUJGdDCs2b5EZG/vmaMAntpSFH5BFKE=
+ github.com/docker/go-units v0.5.0 h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4=
+ github.com/docker/go-units v0.5.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
++github.com/eapache/go-resiliency v1.7.0 h1:n3NRTnBn5N0Cbi/IeOHuQn9s2UwVUH7Ga0ZWcP+9JTA=
++github.com/eapache/go-resiliency v1.7.0/go.mod h1:5yPzW0MIvSe0JDsv0v+DvcjEv2FyD6iZYSs1ZI+iQho=
++github.com/eapache/queue v1.1.0 h1:YOEu7KNc61ntiQlcEeUIoDTJ2o8mQznoNvUhiigpIqc=
++github.com/eapache/queue v1.1.0/go.mod h1:6eCeP0CKFpHLu8blIFXhExK/dRa7WDZfr6jVFPTqq+I=
+ github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/ISU=
+ github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
+ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
+@@ -62,8 +69,13 @@ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+ github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+ github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+ github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
++github.com/gorilla/securecookie v1.1.1/go.mod h1:ra0sb63/xPlUeL+yeDciTfxMRAA+MP+HVt/4epWDjd4=
++github.com/gorilla/sessions v1.2.1/go.mod h1:dk2InVEVJ0sfLlnXv9EAgkf6ecYs/i80K/zI+bUmuGM=
+ github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 h1:HWRh5R2+9EifMyIHV7ZV+MIZqgz+PMpZ14Jynv3O2Zs=
+ github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0/go.mod h1:JfhWUomR1baixubs02l85lZYYOm7LV6om4ceouMv45c=
++github.com/hashicorp/go-uuid v1.0.2/go.mod h1:6SBZvOh/SIDV7/2o3Jml5SYk/TvGqwFJ/bN7x4byOro=
++github.com/hashicorp/go-uuid v1.0.3 h1:2gKiV6YVmrJ1i2CKKa9obLvRieoRGviZFL26PcT/Co8=
++github.com/hashicorp/go-uuid v1.0.3/go.mod h1:6SBZvOh/SIDV7/2o3Jml5SYk/TvGqwFJ/bN7x4byOro=
+ github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=
+ github.com/jackc/pgpassfile v1.0.0/go.mod h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=
+ github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a h1:bbPeKD0xmW/Y25WS6cokEszi5g+S0QxI/d45PkRi7Nk=
+@@ -72,6 +84,18 @@ github.com/jackc/pgx/v5 v5.5.4 h1:Xp2aQS8uXButQdnCMWNmvx6UysWQQC+u1EoizjguY+8=
+ github.com/jackc/pgx/v5 v5.5.4/go.mod h1:ez9gk+OAat140fv9ErkZDYFWmXLfV+++K0uAOiwgm1A=
+ github.com/jackc/puddle/v2 v2.2.1 h1:RhxXJtFG022u4ibrCSMSiu5aOq1i77R3OHKNJj77OAk=
+ github.com/jackc/puddle/v2 v2.2.1/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
++github.com/jcmturner/aescts/v2 v2.0.0 h1:9YKLH6ey7H4eDBXW8khjYslgyqG2xZikXP0EQFKrle8=
++github.com/jcmturner/aescts/v2 v2.0.0/go.mod h1:AiaICIRyfYg35RUkr8yESTqvSy7csK90qZ5xfvvsoNs=
++github.com/jcmturner/dnsutils/v2 v2.0.0 h1:lltnkeZGL0wILNvrNiVCR6Ro5PGU/SeBvVO/8c/iPbo=
++github.com/jcmturner/dnsutils/v2 v2.0.0/go.mod h1:b0TnjGOvI/n42bZa+hmXL+kFJZsFT7G4t3HTlQ184QM=
++github.com/jcmturner/gofork v1.7.6 h1:QH0l3hzAU1tfT3rZCnW5zXl+orbkNMMRGJfdJjHVETg=
++github.com/jcmturner/gofork v1.7.6/go.mod h1:1622LH6i/EZqLloHfE7IeZ0uEJwMSUyQ/nDd82IeqRo=
++github.com/jcmturner/goidentity/v6 v6.0.1 h1:VKnZd2oEIMorCTsFBnJWbExfNN7yZr3EhJAxwOkZg6o=
++github.com/jcmturner/goidentity/v6 v6.0.1/go.mod h1:X1YW3bgtvwAXju7V3LCIMpY0Gbxyjn/mY9zx4tFonSg=
++github.com/jcmturner/gokrb5/v8 v8.4.4 h1:x1Sv4HaTpepFkXbt2IkL29DXRf8sOfZXo8eRKh687T8=
++github.com/jcmturner/gokrb5/v8 v8.4.4/go.mod h1:1btQEpgT6k+unzCwX1KdWMEwPPkkgBtP+F6aCACiMrs=
++github.com/jcmturner/rpc/v2 v2.0.3 h1:7FXXj8Ti1IaVFpSAziCZWNzbNuZmnvw/i6CqLNdWfZY=
++github.com/jcmturner/rpc/v2 v2.0.3/go.mod h1:VUJYCIDm3PVOEHw8sgt091/20OJjskO/YJki3ELg/Hc=
+ github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
+ github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
+ github.com/klauspost/compress v1.18.5 h1:/h1gH5Ce+VWNLSWqPzOVn6XBO+vJbCNGvjoaGBFW2IE=
+@@ -116,6 +140,8 @@ github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8
+ github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
+ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
+ github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
++github.com/pierrec/lz4/v4 v4.1.26 h1:GrpZw1gZttORinvzBdXPUXATeqlJjqUG/D87TKMnhjY=
++github.com/pierrec/lz4/v4 v4.1.26/go.mod h1:EoQMVJgeeEOMsCqCzqFm2O0cJvljX2nGZjcRIPL34O4=
+ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+ github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 h1:o4JXh1EVt9k/+g42oCprj/FisM4qX9L3sZB3upGN2ZU=
+@@ -128,14 +154,23 @@ github.com/prometheus/common v0.66.1 h1:h5E0h5/Y8niHc5DlaLlWLArTQI7tMrsfQjHV+d9Z
+ github.com/prometheus/common v0.66.1/go.mod h1:gcaUsgf3KfRSwHY4dIMXLPV0K/Wg1oZ8+SbZk/HH/dA=
+ github.com/prometheus/procfs v0.16.1 h1:hZ15bTNuirocR6u0JZ6BAHHmwS1p8B4P6MRqxtzMyRg=
+ github.com/prometheus/procfs v0.16.1/go.mod h1:teAbpZRB1iIAJYREa1LsoWUXykVXA1KlTmWl8x/U+Is=
++github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 h1:bsUq1dX0N8AOIL7EB/X911+m4EHsnWEHeJ0c+3TTBrg=
++github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9/go.mod h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=
+ github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
+ github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
+ github.com/shirou/gopsutil/v4 v4.26.3 h1:2ESdQt90yU3oXF/CdOlRCJxrP+Am1aBYubTMTfxJ1qc=
+ github.com/shirou/gopsutil/v4 v4.26.3/go.mod h1:LZ6ewCSkBqUpvSOf+LsTGnRinC6iaNUNMGBtDkJBaLQ=
+ github.com/sirupsen/logrus v1.9.4 h1:TsZE7l11zFCLZnZ+teH4Umoq5BhEIfIzfRDZ1Uzql2w=
+ github.com/sirupsen/logrus v1.9.4/go.mod h1:ftWc9WdOfJ0a92nsE2jF5u5ZwH8Bv2zdeOC42RjbV2g=
++github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
++github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
++github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
+ github.com/stretchr/objx v0.5.3 h1:jmXUvGomnU1o3W/V5h2VEradbpJDwGrzugQQvL0POH4=
+ github.com/stretchr/objx v0.5.3/go.mod h1:rDQraq+vQZU7Fde9LOZLr8Tax6zZvy4kuNKF+QYS+U0=
++github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
++github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
++github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
++github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
+ github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+ github.com/testcontainers/testcontainers-go v0.42.0 h1:He3IhTzTZOygSXLJPMX7n44XtK+qhjat1nI9cneBbUY=
+@@ -146,6 +181,7 @@ github.com/tklauser/go-sysconf v0.3.16 h1:frioLaCQSsF5Cy1jgRBrzr6t502KIIwQ0MArYI
+ github.com/tklauser/go-sysconf v0.3.16/go.mod h1:/qNL9xxDhc7tx3HSRsLWNnuzbVfh3e7gh/BmM179nYI=
+ github.com/tklauser/numcpus v0.11.0 h1:nSTwhKH5e1dMNsCdVBukSZrURJRoHbSEQjdEbY+9RXw=
+ github.com/tklauser/numcpus v0.11.0/go.mod h1:z+LwcLq54uWZTX0u/bGobaV34u6V7KNlTZejzM6/3MQ=
++github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+ github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
+ github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
+ go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
+@@ -172,21 +208,50 @@ go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
+ go.uber.org/goleak v1.3.0/go.mod h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE=
+ go.yaml.in/yaml/v2 v2.4.2 h1:DzmwEr2rDGHl7lsFgAHxmNz/1NlQ7xLIrlN2h5d1eGI=
+ go.yaml.in/yaml/v2 v2.4.2/go.mod h1:081UH+NErpNdqlCXm3TtEran0rJZGxAYx9hb/ELlsPU=
+-golang.org/x/crypto v0.49.0 h1:+Ng2ULVvLHnJ/ZFEq4KdcDd/cfjrrjjNSXNzxg0Y4U4=
+-golang.org/x/crypto v0.49.0/go.mod h1:ErX4dUh2UM+CFYiXZRTcMpEcN8b/1gxEuv3nODoYtCA=
+-golang.org/x/net v0.52.0 h1:He/TN1l0e4mmR3QqHMT2Xab3Aj3L9qjbhRm78/6jrW0=
+-golang.org/x/net v0.52.0/go.mod h1:R1MAz7uMZxVMualyPXb+VaqGSa3LIaUqk0eEt3w36Sw=
++golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
++golang.org/x/crypto v0.0.0-20210921155107-089bfa567519/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
++golang.org/x/crypto v0.6.0/go.mod h1:OFC/31mSvZgRz0V1QTNCzfAI1aIRzbiufJtkMIlEp58=
++golang.org/x/crypto v0.50.0 h1:zO47/JPrL6vsNkINmLoo/PH1gcxpls50DNogFvB5ZGI=
++golang.org/x/crypto v0.50.0/go.mod h1:3muZ7vA7PBCE6xgPX7nkzzjiUq87kRItoJQM1Yo8S+Q=
++golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4/go.mod h1:jJ57K6gSWd91VN4djpZkiMVwK6gcyfeH4XE8wZrZaV4=
++golang.org/x/net v0.0.0-20190620200207-3b0461eec859/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
++golang.org/x/net v0.0.0-20200114155413-6afb5195e5aa/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
++golang.org/x/net v0.0.0-20210226172049-e18ecbb05110/go.mod h1:m0MpNAwzfU5UDzcl9v0D8zg8gWTRqZa9RBIspLL5mdg=
++golang.org/x/net v0.0.0-20220722155237-a158d28d115b/go.mod h1:XRhObCWvk6IyKnWLug+ECip1KBveYUHfp+8e9klMJ9c=
++golang.org/x/net v0.6.0/go.mod h1:2Tu9+aMcznHK/AK1HMvgo6xiTLG5rD5rZLDS+rp2Bjs=
++golang.org/x/net v0.7.0/go.mod h1:2Tu9+aMcznHK/AK1HMvgo6xiTLG5rD5rZLDS+rp2Bjs=
++golang.org/x/net v0.53.0 h1:d+qAbo5L0orcWAr0a9JweQpjXF19LMXJE8Ey7hwOdUA=
++golang.org/x/net v0.53.0/go.mod h1:JvMuJH7rrdiCfbeHoo3fCQU24Lf5JJwT9W3sJFulfgs=
++golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
++golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+ golang.org/x/sync v0.20.0 h1:e0PTpb7pjO8GAtTs2dQ6jYa5BWYlMuX047Dco/pItO4=
+ golang.org/x/sync v0.20.0/go.mod h1:9xrNwdLfx4jkKbNva9FpL6vEN7evnE43NNNJQ2LF3+0=
++golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+ golang.org/x/sys v0.0.0-20190916202348-b4ddaad3f8a3/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
++golang.org/x/sys v0.0.0-20201119102817-f84b799fce68/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+ golang.org/x/sys v0.0.0-20201204225414-ed752295db88/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
++golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+ golang.org/x/sys v0.0.0-20210616094352-59db8d763f22/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+-golang.org/x/sys v0.42.0 h1:omrd2nAlyT5ESRdCLYdm3+fMfNFE/+Rf4bDIQImRJeo=
+-golang.org/x/sys v0.42.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
+-golang.org/x/term v0.41.0 h1:QCgPso/Q3RTJx2Th4bDLqML4W6iJiaXFq2/ftQF13YU=
+-golang.org/x/term v0.41.0/go.mod h1:3pfBgksrReYfZ5lvYM0kSO0LIkAl4Yl2bXOkKP7Ec2A=
+-golang.org/x/text v0.35.0 h1:JOVx6vVDFokkpaq1AEptVzLTpDe9KGpj5tR4/X+ybL8=
+-golang.org/x/text v0.35.0/go.mod h1:khi/HExzZJ2pGnjenulevKNX1W67CUy0AsXcNubPGCA=
++golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
++golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
++golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
++golang.org/x/sys v0.43.0 h1:Rlag2XtaFTxp19wS8MXlJwTvoh8ArU6ezoyFsMyCTNI=
++golang.org/x/sys v0.43.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
++golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
++golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
++golang.org/x/term v0.5.0/go.mod h1:jMB1sMXY+tzblOD4FWmEbocvup2/aLOaQEp7JmGp78k=
++golang.org/x/term v0.42.0 h1:UiKe+zDFmJobeJ5ggPwOshJIVt6/Ft0rcfrXZDLWAWY=
++golang.org/x/term v0.42.0/go.mod h1:Dq/D+snpsbazcBG5+F9Q1n2rXV8Ma+71xEjTRufARgY=
++golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
++golang.org/x/text v0.3.3/go.mod h1:5Zoc/QRtKVWzQhOtBMvqHzDpF6irO9z98xDceosuGiQ=
++golang.org/x/text v0.3.7/go.mod h1:u+2+/6zg+i71rQMx5EYifcz6MCKuco9NR6JIITiCfzQ=
++golang.org/x/text v0.7.0/go.mod h1:mrYo+phRRbMaCq/xk9113O4dZlRixOauAjOtrjsXDZ8=
++golang.org/x/text v0.36.0 h1:JfKh3XmcRPqZPKevfXVpI1wXPTqbkE5f7JA92a55Yxg=
++golang.org/x/text v0.36.0/go.mod h1:NIdBknypM8iqVmPiuco0Dh6P5Jcdk8lJL0CUebqK164=
++golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=
++golang.org/x/tools v0.0.0-20191119224855-298f0cb1881e/go.mod h1:b+2E5dAYhXwXZwtnZ6UAqBI28+e2cm9otk0dWdXHAEo=
++golang.org/x/tools v0.1.12/go.mod h1:hNGJHUnrk76NpqgfD5Aqm5Crs+Hm0VOH/i9J2+nxYbc=
++golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+ golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+ gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
+ gonum.org/v1/gonum v0.17.0/go.mod h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=
+@@ -201,6 +266,8 @@ google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j
+ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
+ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
++gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
++gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+ gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+ gotest.tools/v3 v3.5.2 h1:7koQfIKdy+I8UTetycgUqXWSDwpgv193Ka+qRsmBY8Q=
+diff --git a/internal/config/config.go b/internal/config/config.go
+index d5fb290..4f52989 100644
+--- a/internal/config/config.go
++++ b/internal/config/config.go
+@@ -21,6 +21,7 @@ type Config struct {
+ 	AppConfig      AppConfig
+ 	LogLevel       string
+ 	OtelEndpoint   string
++	KafkaBrokers   []string
+ }
+ 
+ type AppConfig struct {
+@@ -66,6 +67,7 @@ func Load(envFile ...string) Config {
+ 		AllowedOrigins: getEnvList("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+ 		LogLevel:       getEnv("LOG_LEVEL", "info"),
+ 		OtelEndpoint:   getEnv("OTEL_ENDPOINT", "jaeger:4318"),
++		KafkaBrokers:   getEnvList("KAFKA_BROKERS", []string{"kafka:9092"}),
+ 		AppConfig: AppConfig{
+ 			ShutdownTimeout: time.Duration(getEnvInt("APP_SHUTDOWN_TIMEOUT_SEC", 15)) * time.Second,
+ 		},
+diff --git a/internal/handler/movies.go b/internal/handler/movies.go
+index bc0197c..c7273a8 100644
+--- a/internal/handler/movies.go
++++ b/internal/handler/movies.go
+@@ -9,6 +9,7 @@ import (
+ 	"strconv"
+ 	"time"
+ 
++	"github.com/charbelhanna96/go-movies-api/internal/kafka"
+ 	"github.com/charbelhanna96/go-movies-api/internal/metrics"
+ 	"github.com/charbelhanna96/go-movies-api/internal/repository"
+ 	"github.com/charbelhanna96/go-movies-api/internal/validator"
+@@ -18,16 +19,18 @@ import (
+ 	"go.opentelemetry.io/otel/codes"
+ )
+ 
+-func NewMoviesHandler(movieRepo repository.MovieRepository, timeout time.Duration) *MoviesHandler {
++func NewMoviesHandler(movieRepo repository.MovieRepository, kafkaProducer *kafka.Producer, timeout time.Duration) *MoviesHandler {
+ 	return &MoviesHandler{
+-		movieRepo: movieRepo,
+-		timeout:   timeout,
++		movieRepo:     movieRepo,
++		timeout:       timeout,
++		kafkaProducer: kafkaProducer,
+ 	}
+ }
+ 
+ type MoviesHandler struct {
+-	movieRepo repository.MovieRepository
+-	timeout   time.Duration
++	movieRepo     repository.MovieRepository
++	timeout       time.Duration
++	kafkaProducer *kafka.Producer
+ }
+ 
+ // GetMovies handles GET /api/v1/movies requests.
+@@ -88,7 +91,26 @@ func (handler *MoviesHandler) GetMovies(respWriter http.ResponseWriter, req *htt
+ 		last := movies[len(movies)-1]
+ 		respWriter.Header().Set("X-Next-Cursor", encodeCursor(last.Rating, last.ID))
+ 	}
+-
++	// publish search event to Kafka — non-blocking, errors are logged not returned
++	go func() {
++		event := kafka.SearchEvent{
++			Filters: kafka.SearchFilters{
++				DirectorIDs: filters.DirectorIDs,
++				GenreIDs:    filters.GenreIDs,
++				MinYear:     filters.MinYear,
++				MaxYear:     filters.MaxYear,
++				MinDuration: filters.MinDuration,
++				MaxDuration: filters.MaxDuration,
++				MinRating:   filters.MinRating,
++				MaxRating:   filters.MaxRating,
++			},
++			ResultsCount: len(movies),
++			Timestamp:    time.Now().UTC(),
++		}
++		if err := handler.kafkaProducer.PublishSearchEvent(event); err != nil {
++			slog.Error("failed to publish search event", "error", err)
++		}
++	}()
+ 	metrics.MoviesReturned.Observe(float64(len(movies)))
+ 	web.JSON(respWriter, http.StatusOK, movies)
+ }
+diff --git a/internal/kafka/producer.go b/internal/kafka/producer.go
+new file mode 100644
+index 0000000..19147d4
+--- /dev/null
++++ b/internal/kafka/producer.go
+@@ -0,0 +1,85 @@
++// Package kafka provides Kafka producer functionality.
++package kafka
++
++import (
++	"encoding/json"
++	"fmt"
++	"log/slog"
++	"time"
++
++	"github.com/IBM/sarama"
++)
++
++const TopicMovieSearched = "movie.searched"
++
++// SearchEvent represents a movie search event published to Kafka.
++type SearchEvent struct {
++	Filters      SearchFilters `json:"filters"`
++	ResultsCount int           `json:"resultsCount"`
++	Timestamp    time.Time     `json:"timestamp"`
++}
++
++type SearchFilters struct {
++	DirectorIDs []int    `json:"directorIds,omitempty"`
++	GenreIDs    []int    `json:"genreIds,omitempty"`
++	MinYear     *int     `json:"minYear,omitempty"`
++	MaxYear     *int     `json:"maxYear,omitempty"`
++	MinDuration *int     `json:"minDuration,omitempty"`
++	MaxDuration *int     `json:"maxDuration,omitempty"`
++	MinRating   *float64 `json:"minRating,omitempty"`
++	MaxRating   *float64 `json:"maxRating,omitempty"`
++}
++
++// Producer wraps a sarama SyncProducer.
++type Producer struct {
++	producer sarama.SyncProducer
++}
++
++// NewProducer creates a new Kafka producer.
++func NewProducer(brokers []string) (*Producer, error) {
++	config := sarama.NewConfig()
++	config.Producer.Return.Successes = true
++	config.Producer.Return.Errors = true
++	config.Producer.RequiredAcks = sarama.WaitForAll
++	config.Producer.Retry.Max = 3
++
++	producer, err := sarama.NewSyncProducer(brokers, config)
++	if err != nil {
++		return nil, fmt.Errorf("create kafka producer: %w", err)
++	}
++
++	slog.Info("kafka producer connected", "brokers", brokers)
++
++	return &Producer{producer: producer}, nil
++}
++
++// PublishSearchEvent publishes a movie search event to Kafka.
++func (p *Producer) PublishSearchEvent(event SearchEvent) error {
++	payload, err := json.Marshal(event)
++	if err != nil {
++		return fmt.Errorf("marshal search event: %w", err)
++	}
++
++	msg := &sarama.ProducerMessage{
++		Topic: TopicMovieSearched,
++		Value: sarama.ByteEncoder(payload),
++	}
++
++	partition, offset, err := p.producer.SendMessage(msg)
++	if err != nil {
++		return fmt.Errorf("publish search event: %w", err)
++	}
++
++	slog.Debug("search event published",
++		"topic", TopicMovieSearched,
++		"partition", partition,
++		"offset", offset,
++	)
++
++	return nil
++}
++
++// Close shuts down the producer.
++func (p *Producer) Close() error {
++	return p.producer.Close()
++}
+diff --git a/main.go b/main.go
+index 1eb75bc..2fac6c8 100644
+--- a/main.go
++++ b/main.go
+@@ -12,6 +12,7 @@ import (
+ 	"github.com/charbelhanna96/go-movies-api/internal/config"
+ 	"github.com/charbelhanna96/go-movies-api/internal/db"
+ 	"github.com/charbelhanna96/go-movies-api/internal/handler"
++	"github.com/charbelhanna96/go-movies-api/internal/kafka"
+ 	"github.com/charbelhanna96/go-movies-api/internal/metrics"
+ 	"github.com/charbelhanna96/go-movies-api/internal/middleware"
+ 	"github.com/charbelhanna96/go-movies-api/internal/repository"
+@@ -59,10 +60,20 @@ func main() {
+ 		}
+ 	}()
+ 
++	kafkaProducer, err := kafka.NewProducer(cfg.KafkaBrokers)
++	if err != nil {
++		slog.Error("failed to create kafka producer", "error", err)
++		os.Exit(1)
++	}
++	defer func() {
++		if err := kafkaProducer.Close(); err != nil {
++			slog.Error("failed to close kafka producer", "error", err)
++		}
++	}()
+ 	movieRepo := repository.NewPostgresMovieRepository(database)
+ 
+ 	healthHandler := handler.NewHealthHandler(database, cfg.HandlersConfig.HealthTimeout)
+-	moviesHandler := handler.NewMoviesHandler(movieRepo, cfg.HandlersConfig.MoviesTimeout)
++	moviesHandler := handler.NewMoviesHandler(movieRepo, kafkaProducer, cfg.HandlersConfig.MoviesTimeout)
+ 
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("GET /health", healthHandler.Health)

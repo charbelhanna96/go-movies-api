@@ -21,6 +21,7 @@ type Config struct {
 	AppConfig      AppConfig
 	LogLevel       string
 	OtelEndpoint   string
+	KafkaBrokers   []string
 }
 
 type AppConfig struct {
@@ -66,6 +67,7 @@ func Load(envFile ...string) Config {
 		AllowedOrigins: getEnvList("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
 		LogLevel:       getEnv("LOG_LEVEL", "info"),
 		OtelEndpoint:   getEnv("OTEL_ENDPOINT", "jaeger:4318"),
+		KafkaBrokers:   getEnvList("KAFKA_BROKERS", []string{"kafka:9092"}),
 		AppConfig: AppConfig{
 			ShutdownTimeout: time.Duration(getEnvInt("APP_SHUTDOWN_TIMEOUT_SEC", 15)) * time.Second,
 		},
