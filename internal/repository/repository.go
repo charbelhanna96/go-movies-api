@@ -17,6 +17,8 @@ type MovieFilters struct {
 	MinRating   *float64
 	MaxRating   *float64
 	Limit       *int
+	AfterRating *float64
+	AfterID     *int
 }
 
 type MovieRepository interface {

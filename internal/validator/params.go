@@ -2,6 +2,7 @@
 package validator
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,6 +29,7 @@ type movieFilterParams struct {
 	MinRating   *float64 `validate:"omitempty,min=0,max=5"`
 	MaxRating   *float64 `validate:"omitempty,min=0,max=5"`
 	Limit       *int     `validate:"omitempty,min=1,max=1000"`
+	AfterCursor *string  `validate:"omitempty"`
 }
 
 // ParseMovieFilters extracts and validates the query parameters from the HTTP request.
@@ -107,6 +109,20 @@ func ParseMovieFilters(r *http.Request) (repository.MovieFilters, error) {
 		return repository.MovieFilters{}, fmt.Errorf("min-rating must not exceed max-rating")
 	}
 
+	var afterRating *float64
+	var afterID *int
+
+	afterCursor := strings.TrimSpace(query.Get("after_cursor"))
+	if query.Has("after_cursor") {
+		if afterCursor == "" {
+			return repository.MovieFilters{}, fmt.Errorf("invalid after_cursor: value is required when \"after_cursor\" is provided")
+		}
+		afterRating, afterID, err = parseCursor(afterCursor)
+		if err != nil {
+			return repository.MovieFilters{}, fmt.Errorf("invalid after_cursor: %w", err)
+		}
+	}
+
 	return repository.MovieFilters{
 		DirectorIDs: params.DirectorIDs,
 		GenreIDs:    params.GenreIDs,
@@ -117,6 +133,8 @@ func ParseMovieFilters(r *http.Request) (repository.MovieFilters, error) {
 		MinRating:   params.MinRating,
 		MaxRating:   params.MaxRating,
 		Limit:       params.Limit,
+		AfterRating: afterRating,
+		AfterID:     afterID,
 	}, nil
 }
 
@@ -195,4 +213,29 @@ func parseOptionalFloat(query url.Values, key string) (*float64, error) {
 	}
 
 	return &value, nil
+}
+
+// parseCursor decodes a base64 cursor string into rating and id components.
+func parseCursor(cursor string) (*float64, *int, error) {
+	decoded, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid cursor encoding")
+	}
+
+	parts := strings.SplitN(string(decoded), ":", 2)
+	if len(parts) != 2 {
+		return nil, nil, fmt.Errorf("invalid cursor format")
+	}
+
+	rating, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid cursor rating")
+	}
+
+	id, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid cursor id")
+	}
+
+	return &rating, &id, nil
 }
