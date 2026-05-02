@@ -108,6 +108,46 @@ Metrics exposed:
 curl http://localhost:8080/metrics
 ```
 
+## Pagination
+
+The `/api/v1/movies` endpoint supports cursor-based pagination. Cursor-based pagination is more reliable than offset-based pagination because it remains consistent even when data changes between requests.
+
+### How it works
+
+When a `limit` is specified, the response includes two headers:
+
+- `X-Has-More` — `true` if there are more results beyond the current page, `false` otherwise
+- `X-Next-Cursor` — the cursor to use to fetch the next page, only present when `X-Has-More` is `true`
+
+Pass the cursor from `X-Next-Cursor` as the `after_cursor` query parameter in your next request.
+
+### Example
+
+```bash
+# Page 1
+curl -v "http://localhost:8080/api/v1/movies?limit=3"
+# Response headers:
+# X-Has-More: true
+# X-Next-Cursor: NC44ODo2
+
+# Page 2 — pass the cursor from the previous response
+curl -v "http://localhost:8080/api/v1/movies?limit=3&after_cursor=NC44ODo2"
+# Response headers:
+# X-Has-More: true
+# X-Next-Cursor: NC43ODoxMg==
+
+# Last page — no X-Next-Cursor header returned
+curl -v "http://localhost:8080/api/v1/movies?limit=3&after_cursor=NC43ODoxMg=="
+# Response headers:
+# X-Has-More: false
+```
+
+### Notes
+
+- Pagination only applies when `limit` is specified. Without a limit, all matching results are returned.
+- Cursors are stable — combining a cursor with additional filters works correctly as long as the filters are consistent across requests.
+- Cursors are opaque — do not construct or modify them manually.
+
 ## Observability
 
 ### Metrics
