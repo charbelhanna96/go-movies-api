@@ -5,34 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/IBM/sarama"
+	commonkafka "github.com/charbelhanna96/go-movies-common/pkg/kafka"
 )
 
 // KafkaProducer defines the interface for publishing Kafka events.
 type KafkaProducer interface {
-	PublishSearchEvent(event SearchEvent) error
-}
-
-const TopicMovieSearched = "movie.searched"
-
-// SearchEvent represents a movie search event published to Kafka.
-type SearchEvent struct {
-	Filters      SearchFilters `json:"filters"`
-	ResultsCount int           `json:"resultsCount"`
-	Timestamp    time.Time     `json:"timestamp"`
-}
-
-type SearchFilters struct {
-	DirectorIDs []int    `json:"directorIds,omitempty"`
-	GenreIDs    []int    `json:"genreIds,omitempty"`
-	MinYear     *int     `json:"minYear,omitempty"`
-	MaxYear     *int     `json:"maxYear,omitempty"`
-	MinDuration *int     `json:"minDuration,omitempty"`
-	MaxDuration *int     `json:"maxDuration,omitempty"`
-	MinRating   *float64 `json:"minRating,omitempty"`
-	MaxRating   *float64 `json:"maxRating,omitempty"`
+	PublishSearchEvent(event commonkafka.SearchEvent) error
 }
 
 // Producer wraps a sarama SyncProducer.
@@ -59,14 +39,14 @@ func NewProducer(brokers []string) (*Producer, error) {
 }
 
 // PublishSearchEvent publishes a movie search event to Kafka.
-func (p *Producer) PublishSearchEvent(event SearchEvent) error {
+func (p *Producer) PublishSearchEvent(event commonkafka.SearchEvent) error {
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("marshal search event: %w", err)
 	}
 
 	msg := &sarama.ProducerMessage{
-		Topic: TopicMovieSearched,
+		Topic: commonkafka.TopicMovieSearched,
 		Value: sarama.ByteEncoder(payload),
 	}
 
@@ -76,7 +56,7 @@ func (p *Producer) PublishSearchEvent(event SearchEvent) error {
 	}
 
 	slog.Debug("search event published",
-		"topic", TopicMovieSearched,
+		"topic", commonkafka.TopicMovieSearched,
 		"partition", partition,
 		"offset", offset,
 	)
