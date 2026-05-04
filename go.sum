@@ -20,6 +20,8 @@ github.com/charbelhanna96/go-movies-common v1.1.0 h1:a90Dw7VBbQMwy44pZpxqOaFYW91
 github.com/charbelhanna96/go-movies-common v1.1.0/go.mod h1:77UaoOBDWSafy68Ixytvzoodi8c1lC16gkfULRv9+Us=
 github.com/charbelhanna96/go-movies-common v1.1.1 h1:lS+Gj2KgNZ59UWd5reQyixGShMJSuoD8IMd64HWDxnU=
 github.com/charbelhanna96/go-movies-common v1.1.1/go.mod h1:77UaoOBDWSafy68Ixytvzoodi8c1lC16gkfULRv9+Us=
+github.com/charbelhanna96/go-movies-common v1.1.2 h1:7ZDsI0zuvaqbvpwv3j/C0sN/KSy8mqaxup50bNcM8Rw=
+github.com/charbelhanna96/go-movies-common v1.1.2/go.mod h1:77UaoOBDWSafy68Ixytvzoodi8c1lC16gkfULRv9+Us=
 github.com/containerd/errdefs v1.0.0 h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI=
 github.com/containerd/errdefs v1.0.0/go.mod h1:+YBYIdtsnF4Iw6nWZhJcqGSg/dwvV7tyJ/kCkyJ2k+M=
 github.com/containerd/errdefs/pkg v0.3.0 h1:9IKJ06FvyNlexW690DXuQNx2KA2cUJXx151Xdx3ZPPE=

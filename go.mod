@@ -3,7 +3,7 @@ module github.com/charbelhanna96/go-movies-api
 go 1.25.5
 
 require (
-	github.com/charbelhanna96/go-movies-common v1.1.1
+	github.com/charbelhanna96/go-movies-common v1.1.2
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3
