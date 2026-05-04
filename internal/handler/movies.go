@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-func NewMoviesHandler(movieRepo repository.MovieRepository, kafkaProducer *kafka.Producer, timeout time.Duration) *MoviesHandler {
+func NewMoviesHandler(movieRepo repository.MovieRepository, kafkaProducer kafka.KafkaProducer, timeout time.Duration) *MoviesHandler {
 	return &MoviesHandler{
 		movieRepo:     movieRepo,
 		timeout:       timeout,
@@ -30,7 +30,7 @@ func NewMoviesHandler(movieRepo repository.MovieRepository, kafkaProducer *kafka
 type MoviesHandler struct {
 	movieRepo     repository.MovieRepository
 	timeout       time.Duration
-	kafkaProducer *kafka.Producer
+	kafkaProducer kafka.KafkaProducer
 }
 
 // GetMovies handles GET /api/v1/movies requests.

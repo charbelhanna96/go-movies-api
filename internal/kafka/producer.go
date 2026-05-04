@@ -10,6 +10,11 @@ import (
 	"github.com/IBM/sarama"
 )
 
+// KafkaProducer defines the interface for publishing Kafka events.
+type KafkaProducer interface {
+	PublishSearchEvent(event SearchEvent) error
+}
+
 const TopicMovieSearched = "movie.searched"
 
 // SearchEvent represents a movie search event published to Kafka.

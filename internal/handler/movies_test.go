@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/charbelhanna96/go-movies-api/internal/handler"
+	"github.com/charbelhanna96/go-movies-api/internal/kafka"
 	"github.com/charbelhanna96/go-movies-api/internal/model"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,12 @@ type mockMovieRepository struct {
 
 func (m *mockMovieRepository) GetMovies(ctx context.Context, filters repository.MovieFilters) ([]model.Movie, error) {
 	return m.movies, m.err
+}
+
+type mockKafkaProducer struct{}
+
+func (m *mockKafkaProducer) PublishSearchEvent(event kafka.SearchEvent) error {
+	return nil
 }
 
 var testMovies = []model.Movie{
@@ -46,9 +53,13 @@ var testMovies = []model.Movie{
 	},
 }
 
+func newHandler(repo *mockMovieRepository) *handler.MoviesHandler {
+	return handler.NewMoviesHandler(repo, &mockKafkaProducer{}, 5*time.Second)
+}
+
 func TestGetMovies_Success(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies}
-	h := handler.NewMoviesHandler(repo, 5*time.Second)
+	h := newHandler(repo)
 
 	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
 	w := httptest.NewRecorder()
@@ -65,7 +76,7 @@ func TestGetMovies_Success(t *testing.T) {
 
 func TestGetMovies_EmptyResult(t *testing.T) {
 	repo := &mockMovieRepository{movies: []model.Movie{}}
-	h := handler.NewMoviesHandler(repo, 5*time.Second)
+	h := newHandler(repo)
 
 	req := httptest.NewRequest("GET", "/api/v1/movies?min-rating=5.0", nil)
 	w := httptest.NewRecorder()
@@ -81,7 +92,7 @@ func TestGetMovies_EmptyResult(t *testing.T) {
 
 func TestGetMovies_InvalidQueryParam(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies}
-	h := handler.NewMoviesHandler(repo, 5*time.Second)
+	h := newHandler(repo)
 
 	req := httptest.NewRequest("GET", "/api/v1/movies?min-year=abc", nil)
 	w := httptest.NewRecorder()
@@ -97,7 +108,7 @@ func TestGetMovies_InvalidQueryParam(t *testing.T) {
 
 func TestGetMovies_RepositoryError(t *testing.T) {
 	repo := &mockMovieRepository{err: fmt.Errorf("database connection lost")}
-	h := handler.NewMoviesHandler(repo, 5*time.Second)
+	h := newHandler(repo)
 
 	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
 	w := httptest.NewRecorder()
@@ -113,7 +124,7 @@ func TestGetMovies_RepositoryError(t *testing.T) {
 
 func TestGetMovies_ContentTypeIsJSON(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies}
-	h := handler.NewMoviesHandler(repo, 5*time.Second)
+	h := newHandler(repo)
 
 	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
 	w := httptest.NewRecorder()
@@ -125,7 +136,7 @@ func TestGetMovies_ContentTypeIsJSON(t *testing.T) {
 
 func TestGetMovies_WithValidFilters(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies[:1]}
-	h := handler.NewMoviesHandler(repo, 5*time.Second)
+	h := newHandler(repo)
 
 	req := httptest.NewRequest("GET", "/api/v1/movies?directors=1&min-rating=4.0&limit=1", nil)
 	w := httptest.NewRecorder()
@@ -141,7 +152,7 @@ func TestGetMovies_WithValidFilters(t *testing.T) {
 
 func TestGetMovies_ResponseIsJSONArray(t *testing.T) {
 	repo := &mockMovieRepository{movies: []model.Movie{}}
-	h := handler.NewMoviesHandler(repo, 5*time.Second)
+	h := newHandler(repo)
 
 	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
 	w := httptest.NewRecorder()
@@ -150,4 +161,32 @@ func TestGetMovies_ResponseIsJSONArray(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "[]")
+}
+
+func TestGetMovies_PaginationHasMore(t *testing.T) {
+	repo := &mockMovieRepository{movies: testMovies}
+	h := newHandler(repo)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies?limit=1", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "true", w.Header().Get("X-Has-More"))
+	assert.NotEmpty(t, w.Header().Get("X-Next-Cursor"))
+}
+
+func TestGetMovies_PaginationNoMore(t *testing.T) {
+	repo := &mockMovieRepository{movies: testMovies}
+	h := newHandler(repo)
+
+	req := httptest.NewRequest("GET", "/api/v1/movies?limit=10", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMovies(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "false", w.Header().Get("X-Has-More"))
+	assert.Empty(t, w.Header().Get("X-Next-Cursor"))
 }
