@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/charbelhanna96/go-movies-api/internal/kafka"
 	"github.com/charbelhanna96/go-movies-api/internal/metrics"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
 	"github.com/charbelhanna96/go-movies-api/internal/validator"
@@ -18,16 +19,18 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-func NewMoviesHandler(movieRepo repository.MovieRepository, timeout time.Duration) *MoviesHandler {
+func NewMoviesHandler(movieRepo repository.MovieRepository, kafkaProducer kafka.KafkaProducer, timeout time.Duration) *MoviesHandler {
 	return &MoviesHandler{
-		movieRepo: movieRepo,
-		timeout:   timeout,
+		movieRepo:     movieRepo,
+		timeout:       timeout,
+		kafkaProducer: kafkaProducer,
 	}
 }
 
 type MoviesHandler struct {
-	movieRepo repository.MovieRepository
-	timeout   time.Duration
+	movieRepo     repository.MovieRepository
+	timeout       time.Duration
+	kafkaProducer kafka.KafkaProducer
 }
 
 // GetMovies handles GET /api/v1/movies requests.
@@ -88,7 +91,26 @@ func (handler *MoviesHandler) GetMovies(respWriter http.ResponseWriter, req *htt
 		last := movies[len(movies)-1]
 		respWriter.Header().Set("X-Next-Cursor", encodeCursor(last.Rating, last.ID))
 	}
-
+	// publish search event to Kafka — non-blocking, errors are logged not returned
+	go func() {
+		event := kafka.SearchEvent{
+			Filters: kafka.SearchFilters{
+				DirectorIDs: filters.DirectorIDs,
+				GenreIDs:    filters.GenreIDs,
+				MinYear:     filters.MinYear,
+				MaxYear:     filters.MaxYear,
+				MinDuration: filters.MinDuration,
+				MaxDuration: filters.MaxDuration,
+				MinRating:   filters.MinRating,
+				MaxRating:   filters.MaxRating,
+			},
+			ResultsCount: len(movies),
+			Timestamp:    time.Now().UTC(),
+		}
+		if err := handler.kafkaProducer.PublishSearchEvent(event); err != nil {
+			slog.Error("failed to publish search event", "error", err)
+		}
+	}()
 	metrics.MoviesReturned.Observe(float64(len(movies)))
 	web.JSON(respWriter, http.StatusOK, movies)
 }
