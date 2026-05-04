@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/charbelhanna96/go-movies-api/internal/web"
+	"github.com/charbelhanna96/go-movies-common/pkg/web"
 )
 
 type HealthHandler struct {

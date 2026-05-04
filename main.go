@@ -10,13 +10,14 @@ import (
 	"syscall"
 
 	"github.com/charbelhanna96/go-movies-api/internal/config"
-	"github.com/charbelhanna96/go-movies-api/internal/db"
 	"github.com/charbelhanna96/go-movies-api/internal/handler"
 	"github.com/charbelhanna96/go-movies-api/internal/kafka"
 	"github.com/charbelhanna96/go-movies-api/internal/metrics"
 	"github.com/charbelhanna96/go-movies-api/internal/middleware"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
-	"github.com/charbelhanna96/go-movies-api/internal/tracing"
+	commondb "github.com/charbelhanna96/go-movies-common/pkg/db"
+	commonmiddleware "github.com/charbelhanna96/go-movies-common/pkg/middleware"
+	"github.com/charbelhanna96/go-movies-common/pkg/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -31,12 +32,11 @@ func main() {
 		Level: level,
 	})))
 
-	shutdownTracing, err := tracing.Setup(context.Background(), cfg.OtelEndpoint)
+	shutdownTracing, err := tracing.Setup(context.Background(), cfg.OtelEndpoint, "go-movies-api")
 	if err != nil {
 		slog.Error("failed to setup tracing", "error", err)
 		os.Exit(1)
 	}
-
 	defer func() {
 		if err := shutdownTracing(context.Background()); err != nil {
 			slog.Error("failed to shutdown tracing", "error", err)
@@ -48,12 +48,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	database, err := db.Connect(cfg.Database)
+	database, err := commondb.Connect(cfg.Database)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
-
 	defer func() {
 		if err := database.Close(); err != nil {
 			slog.Error("failed to close database", "error", err)
@@ -70,6 +69,7 @@ func main() {
 			slog.Error("failed to close kafka producer", "error", err)
 		}
 	}()
+
 	movieRepo := repository.NewPostgresMovieRepository(database)
 
 	healthHandler := handler.NewHealthHandler(database, cfg.HandlersConfig.HealthTimeout)
@@ -84,8 +84,11 @@ func main() {
 	mux.HandleFunc("GET /api/v1/movies", moviesHandler.GetMovies)
 
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      middleware.CORS(cfg.AllowedOrigins, middleware.Tracing(middleware.Metrics(mux))),
+		Addr: ":" + cfg.Port,
+		Handler: commonmiddleware.CORS(
+			cfg.AllowedOrigins,
+			commonmiddleware.Tracing("go-movies-api", middleware.Metrics(mux)),
+		),
 		ReadTimeout:  cfg.HTTPConfig.ReadTimeout,
 		WriteTimeout: cfg.HTTPConfig.WriteTimeout,
 		IdleTimeout:  cfg.HTTPConfig.IdleTimeout,
@@ -93,7 +96,6 @@ func main() {
 
 	go func() {
 		slog.Info("backend service listening", "port", cfg.Port)
-
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server error", "error", err)
 			os.Exit(1)

@@ -13,7 +13,8 @@ import (
 	"github.com/charbelhanna96/go-movies-api/internal/metrics"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
 	"github.com/charbelhanna96/go-movies-api/internal/validator"
-	"github.com/charbelhanna96/go-movies-api/internal/web"
+	commonkafka "github.com/charbelhanna96/go-movies-common/pkg/kafka"
+	"github.com/charbelhanna96/go-movies-common/pkg/web"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -93,8 +94,8 @@ func (handler *MoviesHandler) GetMovies(respWriter http.ResponseWriter, req *htt
 	}
 	// publish search event to Kafka — non-blocking, errors are logged not returned
 	go func() {
-		event := kafka.SearchEvent{
-			Filters: kafka.SearchFilters{
+		event := commonkafka.SearchEvent{
+			Filters: commonkafka.SearchFilters{
 				DirectorIDs: filters.DirectorIDs,
 				GenreIDs:    filters.GenreIDs,
 				MinYear:     filters.MinYear,

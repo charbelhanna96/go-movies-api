@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/charbelhanna96/go-movies-api/internal/handler"
-	"github.com/charbelhanna96/go-movies-api/internal/kafka"
 	"github.com/charbelhanna96/go-movies-api/internal/model"
 	"github.com/charbelhanna96/go-movies-api/internal/repository"
+	commonkafka "github.com/charbelhanna96/go-movies-common/pkg/kafka"
+	"github.com/charbelhanna96/go-movies-common/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +28,7 @@ func (m *mockMovieRepository) GetMovies(ctx context.Context, filters repository.
 
 type mockKafkaProducer struct{}
 
-func (m *mockKafkaProducer) PublishSearchEvent(event kafka.SearchEvent) error {
+func (m *mockKafkaProducer) PublishSearchEvent(event commonkafka.SearchEvent) error {
 	return nil
 }
 
@@ -61,8 +61,8 @@ func TestGetMovies_Success(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", nil)
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
@@ -78,8 +78,8 @@ func TestGetMovies_EmptyResult(t *testing.T) {
 	repo := &mockMovieRepository{movies: []model.Movie{}}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies?min-rating=5.0", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", map[string]string{"min-rating": "5.0"})
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
@@ -94,8 +94,8 @@ func TestGetMovies_InvalidQueryParam(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies?min-year=abc", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", map[string]string{"min-year": "abc"})
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
@@ -110,8 +110,8 @@ func TestGetMovies_RepositoryError(t *testing.T) {
 	repo := &mockMovieRepository{err: fmt.Errorf("database connection lost")}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", nil)
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
@@ -126,8 +126,8 @@ func TestGetMovies_ContentTypeIsJSON(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", nil)
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
@@ -138,8 +138,12 @@ func TestGetMovies_WithValidFilters(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies[:1]}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies?directors=1&min-rating=4.0&limit=1", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", map[string]string{
+		"directors":  "1",
+		"min-rating": "4.0",
+		"limit":      "1",
+	})
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
@@ -154,8 +158,8 @@ func TestGetMovies_ResponseIsJSONArray(t *testing.T) {
 	repo := &mockMovieRepository{movies: []model.Movie{}}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", nil)
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
@@ -167,8 +171,8 @@ func TestGetMovies_PaginationHasMore(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies?limit=1", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", map[string]string{"limit": "1"})
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
@@ -181,8 +185,8 @@ func TestGetMovies_PaginationNoMore(t *testing.T) {
 	repo := &mockMovieRepository{movies: testMovies}
 	h := newHandler(repo)
 
-	req := httptest.NewRequest("GET", "/api/v1/movies?limit=10", nil)
-	w := httptest.NewRecorder()
+	req := testutil.NewRequest("GET", "/api/v1/movies", map[string]string{"limit": "10"})
+	w := testutil.NewRecorder()
 
 	h.GetMovies(w, req)
 
